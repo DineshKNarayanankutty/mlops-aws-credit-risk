@@ -227,6 +227,7 @@ resource "aws_kms_key" "node_ebs" {
   description             = "KMS key for EKS node EBS volumes (${var.cluster_name})"
   deletion_window_in_days = var.kms_deletion_window_in_days
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.node_ebs_kms.json
 
   tags = merge(
     {
@@ -241,6 +242,75 @@ resource "aws_kms_alias" "node_ebs" {
   target_key_id = aws_kms_key.node_ebs.key_id
 }
 
+data "aws_iam_policy_document" "node_ebs_kms" {
+  statement {
+    sid    = "EnableRootPermissions"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions = ["kms:*"]
+    # KMS key policies use "*" to refer to the key resource itself.
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowAutoScalingServiceLinkedRoleUseOfKey"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values = [
+        "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling*"
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowAutoScalingServiceLinkedRoleCreateGrant"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions   = ["kms:CreateGrant"]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values = [
+        "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling*"
+      ]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+}
 data "aws_iam_policy_document" "cluster_autoscaler_assume_role" {
   count = local.create_cluster_autoscaler ? 1 : 0
 
