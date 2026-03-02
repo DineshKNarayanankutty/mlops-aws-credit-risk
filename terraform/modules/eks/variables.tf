@@ -24,8 +24,8 @@ variable "private_subnets" {
   type = list(string)
 
   validation {
-    condition     = length(var.private_subnets) > 0
-    error_message = "private_subnets must contain at least one private subnet for worker node placement."
+    condition     = length(var.private_subnets) >= 2
+    error_message = "private_subnets must contain at least two private subnets in different AZs for EKS control-plane requirements."
   }
 }
 
@@ -124,3 +124,4 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
