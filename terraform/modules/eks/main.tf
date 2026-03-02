@@ -74,7 +74,8 @@ locals {
     }
   )
 
-  create_cluster_autoscaler = var.environment == "prod"
+  create_cluster_autoscaler    = var.environment == "prod"
+  system_node_group_subnet_ids = var.environment == "dev" ? [var.private_subnets[0]] : null
 }
 
 resource "aws_security_group" "alb_backend" {
@@ -148,6 +149,7 @@ module "eks" {
         min_size     = local.node_group_profile.system_min_size
         max_size     = local.node_group_profile.system_max_size
         desired_size = local.node_group_profile.system_desired_size
+        subnet_ids   = local.system_node_group_subnet_ids
 
         block_device_mappings = {
           xvda = {
@@ -346,3 +348,4 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   role       = aws_iam_role.cluster_autoscaler[0].name
   policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
 }
+
