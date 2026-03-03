@@ -245,7 +245,7 @@ data "aws_iam_policy_document" "codepipeline" {
     actions = [
       "codestar-connections:UseConnection"
     ]
-    resources = [var.codestar_connection_arn]
+    resources = [var.code_connection_arn]
   }
 
   statement {

@@ -74,7 +74,7 @@ variable "cicd_artifact_bucket_name" {
   type = string
 }
 
-variable "codestar_connection_arn" {
+variable "code_connection_arn" {
   type = string
 }
 

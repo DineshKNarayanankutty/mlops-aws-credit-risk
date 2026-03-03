@@ -62,7 +62,7 @@ variable "training_data_bucket_arn" {
   type        = string
 }
 
-variable "codestar_connection_arn" {
+variable "code_connection_arn" {
   description = "CodeStar connection ARN for GitHub source integration"
   type        = string
 }

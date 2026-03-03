@@ -61,7 +61,7 @@ module "iam" {
   model_artifacts_bucket_arn          = module.sagemaker.model_artifacts_bucket_arn
   model_artifacts_kms_key_arn         = module.sagemaker.model_artifacts_kms_key_arn
   training_data_bucket_arn            = local.training_data_bucket_arn
-  codestar_connection_arn             = var.codestar_connection_arn
+  code_connection_arn                 = var.code_connection_arn
   inference_namespace                 = var.inference_namespace
   inference_service_account_name      = var.inference_service_account_name
   alb_controller_namespace            = var.alb_controller_namespace
@@ -76,7 +76,7 @@ module "cicd" {
   artifact_bucket_name        = var.cicd_artifact_bucket_name
   codebuild_role_arn          = module.iam.codebuild_role_arn
   codepipeline_role_arn       = module.iam.codepipeline_role_arn
-  codestar_connection_arn     = var.codestar_connection_arn
+  code_connection_arn         = var.code_connection_arn
   github_full_repository_id   = var.github_full_repository_id
   github_branch               = var.github_branch
   ecr_repository_url          = module.ecr.repository_url

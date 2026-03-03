@@ -18,7 +18,7 @@ variable "codepipeline_role_arn" {
   type        = string
 }
 
-variable "codestar_connection_arn" {
+variable "code_connection_arn" {
   description = "CodeStar connection ARN for GitHub"
   type        = string
 }

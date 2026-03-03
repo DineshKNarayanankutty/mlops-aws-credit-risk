@@ -341,7 +341,7 @@ resource "aws_codepipeline" "this" {
       output_artifacts = ["SourceOutput"]
 
       configuration = {
-        ConnectionArn    = var.codestar_connection_arn
+        ConnectionArn    = var.code_connection_arn
         FullRepositoryId = var.github_full_repository_id
         BranchName       = var.github_branch
         DetectChanges    = "true"

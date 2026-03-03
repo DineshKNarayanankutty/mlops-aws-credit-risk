@@ -114,7 +114,7 @@ State is stored in S3 with native locking (`use_lockfile = true`) and encryption
 Before deploying, update the placeholder values in the environment's `terraform.tfvars`:
 
 ```hcl
-codestar_connection_arn   = "arn:aws:codestar-connections:..."
+code_connection_arn   = "arn:aws:codestar-connections:..."
 github_full_repository_id = "your-org/your-repo"
 ```
 

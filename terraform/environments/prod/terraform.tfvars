@@ -11,7 +11,7 @@ model_package_group_name              = "mlops-prod-model-package-group"
 sagemaker_model_artifacts_bucket_name = "mlops-prod-model-artifacts-bucket777"
 cicd_artifact_bucket_name             = "mlops-prod-cicd-artifacts-bucket777"
 
-codestar_connection_arn   = "REPLACE_WITH_CODESTAR_CONNECTION_ARN"
+code_connection_arn       = "REPLACE_WITH_code_connection_arn"
 github_full_repository_id = "REPLACE_WITH_GITHUB_ORG_REPO"
 github_branch             = "main"
 

@@ -281,6 +281,6 @@ output "pipeline_name" {
   value = aws_codepipeline.this.name
 }
 
-output "codestar_connection_arn" {
+output "code_connection_arn" {
   value = aws_codestarconnections_connection.github.arn
 }
