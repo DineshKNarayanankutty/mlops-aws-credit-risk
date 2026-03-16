@@ -1,0 +1,12 @@
+# FIX: PodDisruptionBudget prevents rolling updates or node drains
+# from dropping to 0 replicas. Ensures at least 1 pod stays available.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: credit-risk-api
+  namespace: inference
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: credit-risk-api
