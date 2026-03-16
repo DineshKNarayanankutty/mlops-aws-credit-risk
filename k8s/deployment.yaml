@@ -2,51 +2,189 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: credit-risk-api
+  namespace: inference          # FIX C-02: Must match IRSA role binding
   labels:
     app: credit-risk-api
+    version: "1.0"
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: credit-risk-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0        # Never go below minReplicas during rollout
+      maxSurge: 1
   template:
     metadata:
       labels:
         app: credit-risk-api
+        version: "1.0"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics"
         prometheus.io/port: "8000"
     spec:
+      serviceAccountName: inference-service   # FIX C-02: Binds pod to IRSA role
+
+      # FIX C-03: Toleration for the inference node pool taint (workload=inference:NoSchedule)
+      tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "inference"
+          effect: "NoSchedule"
+
+      # FIX: Node affinity — prefer inference node group, fall back to any node
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: workload
+                    operator: In
+                    values: ["inference"]
+        # FIX: Spread replicas across AZs — prevents both pods on same node
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: credit-risk-api
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: credit-risk-api
+                topologyKey: topology.kubernetes.io/zone
+
+      # FIX C-04: Init container downloads model from S3 at pod startup.
+      # The main container never contains a baked-in model.pkl.
+      # Uses the IRSA-backed ServiceAccount for S3 access (no extra credentials needed).
+      initContainers:
+        - name: model-downloader
+          image: amazon/aws-cli:2.15.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              echo "Downloading model from s3://${MODEL_BUCKET}/${MODEL_S3_KEY} ..."
+              mkdir -p /model
+              aws s3 cp "s3://${MODEL_BUCKET}/${MODEL_S3_KEY}" /model/model.pkl
+              echo "Model download complete."
+          env:
+            - name: MODEL_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: inference-config
+                  key: model_bucket
+            - name: MODEL_S3_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: inference-config
+                  key: model_s3_key
+          volumeMounts:
+            - name: model-volume
+              mountPath: /model
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: false   # aws-cli needs tmp write access
+            capabilities:
+              drop: ["ALL"]
+
       containers:
         - name: credit-risk-api
-          image: credit-risk-api:latest
+          # FIX C-02 / C-04: Image tag injected at deploy time by the CI pipeline
+          # (kubectl set image uses the commit-SHA tag from imageDetail.json)
+          # Never use :latest in production manifests.
+          image: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/mlops-platform-ENV-inference:PLACEHOLDER
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+              name: http
+              protocol: TCP
           env:
             - name: MODEL_PATH
               value: /app/model/model.pkl
             - name: EXPECTED_FEATURES
               value: "20"
+            # FIX: Use AWS_REGION from downward API (not hardcoded)
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['topology.kubernetes.io/region']
+          volumeMounts:
+            - name: model-volume
+              mountPath: /app/model
+              readOnly: true
+            - name: tmp-volume
+              mountPath: /tmp          # readOnlyRootFilesystem needs a writable /tmp
+
+          # FIX: Increased requests/limits based on RandomForest 300-estimator profile
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
+              cpu: 250m
               memory: 512Mi
+            limits:
+              cpu: 1500m
+              memory: 1Gi
+
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
-            timeoutSeconds: 3
+            timeoutSeconds: 5
+            failureThreshold: 3
+
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 20
+            initialDelaySeconds: 30
             periodSeconds: 20
-            timeoutSeconds: 3
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 5   # Up to 150s for cold start (model download + load)
+
+          # FIX: securityContext hardening
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: model-volume
+          emptyDir: {}           # Shared between init container and main container
+        - name: tmp-volume
+          emptyDir: {}
+
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      terminationGracePeriodSeconds: 60
