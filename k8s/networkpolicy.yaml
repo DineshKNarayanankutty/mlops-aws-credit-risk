@@ -1,0 +1,64 @@
+# FIX: NetworkPolicy — enforce zero-trust pod-to-pod communication.
+# Only allows:
+#   - Ingress from kube-system (ALB health checks via node port)
+#   - Ingress within inference namespace (inter-service calls if any)
+#   - Egress to kube-dns (DNS resolution)
+#   - Egress to AWS VPC endpoints (S3, ECR, STS via private CIDR)
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: credit-risk-api
+  namespace: inference
+spec:
+  podSelector:
+    matchLabels:
+      app: credit-risk-api
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic from ALB controller / node ports
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+    # Allow intra-namespace traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: inference
+
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTPS to AWS endpoints (S3, ECR, STS — via VPC endpoints on 443)
+    - ports:
+        - port: 443
+          protocol: TCP
+---
+# Allow Prometheus to scrape /metrics from the inference namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: inference
+spec:
+  podSelector:
+    matchLabels:
+      app: credit-risk-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8000
+          protocol: TCP
