@@ -1,7 +1,7 @@
 # ─── Stage 1: Builder ───────────────────────────────────────────────
 # FIX: Pinned to digest for reproducible builds.
 # To update: docker pull python:3.10-slim && docker inspect --format='{{index .RepoDigests 0}}' python:3.10-slim
-FROM python:3.10-slim@sha256:06c1c6e8b55e6f2d49dfdae9e53dbb80e5e9e56843a91e4c5f5e95d3ee0fc84d AS builder
+FROM python:3.10-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -9,16 +9,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install --only-upgrade -y libc6 libc-bin && \
+    rm -f /usr/lib/x86_64-linux-gnu/gconv/IBM1390.so \
+          /usr/lib/x86_64-linux-gnu/gconv/IBM1399.so || true && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # FIX C-05: Correct requirements.txt path (was inference/requirements.txt — file didn't exist)
 COPY requirements.txt .
 RUN pip install --user --no-warn-script-location -r requirements.txt
 
 # ─── Stage 2: Runtime ───────────────────────────────────────────────
-FROM python:3.10-slim@sha256:06c1c6e8b55e6f2d49dfdae9e53dbb80e5e9e56843a91e4c5f5e95d3ee0fc84d
+FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
